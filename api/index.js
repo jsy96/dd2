@@ -360,12 +360,4 @@ app.get('/api/download', async (req, res) => {
 });
 
 // 导出为 Vercel serverless 函数
-module.exports = (req, res) => {
-  // 添加静态文件服务支持
-  if (req.url.startsWith('/api/')) {
-    app(req, res);
-  } else {
-    // 对于非 API 请求，返回 404（静态文件由 Vercel 直接处理）
-    res.status(404).json({ error: 'Not found' });
-  }
-};
+module.exports = app;
