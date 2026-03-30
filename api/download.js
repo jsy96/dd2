@@ -36,23 +36,31 @@ module.exports = async (req, res) => {
     // 读取文件
     const fileBuffer = await fs.readFile(filePath);
 
-    // 根据文件扩展名设置 MIME 类型
+    // 根据文件扩展名设置 MIME 类型和下载文件名
     const ext = path.extname(filename).toLowerCase();
     let contentType = 'application/octet-stream';
+    let downloadName = 'download';
+
     if (ext === '.doc' || ext === '.docx') {
       contentType = 'application/msword';
+      downloadName = 'shipping-order.doc';
     } else if (ext === '.xls' || ext === '.xlsx') {
       contentType = 'application/vnd.ms-excel';
+      downloadName = 'packing-list-invoice.xls';
     }
 
-    // 设置响应头
+    // 设置响应头 - 使用简单的 ASCII 文件名避免编码问题
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', fileBuffer.length);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Disposition');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
-    res.send(fileBuffer);
+    return res.status(200).send(fileBuffer);
   } catch (error) {
     console.error('下载文件失败:', error);
     res.setHeader('Access-Control-Allow-Origin', '*');

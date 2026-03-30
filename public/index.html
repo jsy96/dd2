@@ -238,28 +238,48 @@
     }
 
     // 下载 Word 文件
-    function downloadWordFile() {
-      if (wordFileUrl) {
-        // 使用 a 标签下载
+    async function downloadWordFile() {
+      if (!wordFileUrl) return;
+
+      try {
+        const response = await fetch(wordFileUrl);
+        if (!response.ok) throw new Error('下载失败');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = wordFileUrl;
-        link.download = '提单确认件.doc';
+        link.href = url;
+        link.download = 'shipping-order.doc';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        showError('下载失败，请重试');
+        console.error(err);
       }
     }
 
     // 下载 Excel 文件
-    function downloadExcelFile() {
-      if (excelFileUrl) {
-        // 使用 a 标签下载
+    async function downloadExcelFile() {
+      if (!excelFileUrl) return;
+
+      try {
+        const response = await fetch(excelFileUrl);
+        if (!response.ok) throw new Error('下载失败');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = excelFileUrl;
-        link.download = '装箱单发票.xlsx';
+        link.href = url;
+        link.download = 'packing-list-invoice.xls';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        showError('下载失败，请重试');
+        console.error(err);
       }
     }
 
