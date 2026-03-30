@@ -267,13 +267,13 @@
     // 下载 Word 文档
     function downloadWordFile() {
       if (!wordFileBase64) return;
-      downloadBase64File(wordFileBase64, 'shipping-order.doc', 'application/msword');
+      downloadBase64File(wordFileBase64, '提单确认件.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
     // 下载 Excel 文档
     function downloadExcelFile() {
       if (!excelFileBase64) return;
-      downloadBase64File(excelFileBase64, 'packing-list-invoice.xls', 'application/vnd.ms-excel');
+      downloadBase64File(excelFileBase64, '装箱单发票.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 
   </script>
