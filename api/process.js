@@ -1,17 +1,10 @@
 // Vercel serverless function for processing manifest files
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
-
-// Vercel serverless 环境使用 /tmp 目录
-const outputDir = '/tmp/output';
-
-// 确保临时目录存在
-fs.mkdir(outputDir, { recursive: true }).catch(() => {});
 
 // 解析舱单 Excel 文件
 function parseManifestExcel(buffer) {
@@ -196,7 +189,11 @@ async function generateExcelDocument(data) {
   return workbook.xlsx.writeBuffer();
 }
 
-// Export for Vercel
+// Buffer to base64
+function bufferToBase64(buffer) {
+  return buffer.toString('base64');
+}
+
 module.exports = async (req, res) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -211,7 +208,6 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Parse multipart form data
     const formData = await parseFormData(req);
 
     const manifestFile = formData.files.manifest;
@@ -223,28 +219,22 @@ module.exports = async (req, res) => {
     const wordBuffer = await generateWordDocument(cargoData);
     const excelBuffer = await generateExcelDocument(cargoData);
 
-    const timestamp = Date.now();
-    const wordFileName = `提单确认件_${timestamp}.doc`;
-    const excelFileName = `装箱单发票_${timestamp}.xls`;
-
-    const wordFilePath = path.join(outputDir, wordFileName);
-    const excelFilePath = path.join(outputDir, excelFileName);
-
-    await fs.writeFile(wordFilePath, wordBuffer);
-    await fs.writeFile(excelFilePath, excelBuffer);
+    // 将文件转换为 base64 并直接返回
+    const wordBase64 = bufferToBase64(wordBuffer);
+    const excelBase64 = bufferToBase64(excelBuffer);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({
       success: true,
       message: '文件处理成功',
       data: cargoData,
-      wordFileUrl: `/api/download?file=${encodeURIComponent(wordFileName)}`,
-      excelFileUrl: `/api/download?file=${encodeURIComponent(excelFileName)}`,
+      wordFileBase64: wordBase64,
+      excelFileBase64: excelBase64,
     });
   } catch (error) {
     console.error('处理文件失败:', error);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.status(500).json({ success: false, message: '处理文件失败，请检查文件格式' });
+    res.status(500).json({ success: false, message: '处理文件失败：' + error.message });
   }
 };
 

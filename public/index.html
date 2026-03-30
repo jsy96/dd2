@@ -131,8 +131,8 @@
     lucide.createIcons();
 
     let selectedFile = null;
-    let wordFileUrl = null;
-    let excelFileUrl = null;
+    let wordFileBase64 = null;
+    let excelFileBase64 = null;
 
     // 文件选择处理
     const fileInput = document.getElementById('fileInput');
@@ -220,9 +220,9 @@
         const result = await response.json();
 
         if (result.success) {
-          // 保存文件 URL
-          wordFileUrl = result.wordFileUrl;
-          excelFileUrl = result.excelFileUrl;
+          // 保存文件 base64 数据
+          wordFileBase64 = result.wordFileBase64;
+          excelFileBase64 = result.excelFileBase64;
           downloadArea.classList.remove('hidden');
           lucide.createIcons();
         } else {
@@ -237,19 +237,23 @@
       }
     }
 
-    // 下载 Word 文件
-    async function downloadWordFile() {
-      if (!wordFileUrl) return;
-
+    // Base64 转 Blob 并下载
+    function downloadBase64File(base64Data, filename, mimeType) {
       try {
-        const response = await fetch(wordFileUrl);
-        if (!response.ok) throw new Error('下载失败');
+        // 将 base64 转换为 blob
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
 
-        const blob = await response.blob();
+        // 创建下载链接
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'shipping-order.doc';
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -260,27 +264,16 @@
       }
     }
 
-    // 下载 Excel 文件
-    async function downloadExcelFile() {
-      if (!excelFileUrl) return;
+    // 下载 Word 文档
+    function downloadWordFile() {
+      if (!wordFileBase64) return;
+      downloadBase64File(wordFileBase64, 'shipping-order.doc', 'application/msword');
+    }
 
-      try {
-        const response = await fetch(excelFileUrl);
-        if (!response.ok) throw new Error('下载失败');
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'packing-list-invoice.xls';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } catch (err) {
-        showError('下载失败，请重试');
-        console.error(err);
-      }
+    // 下载 Excel 文档
+    function downloadExcelFile() {
+      if (!excelFileBase64) return;
+      downloadBase64File(excelFileBase64, 'packing-list-invoice.xls', 'application/vnd.ms-excel');
     }
 
   </script>
