@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>舱单文件处理系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #f3e8ff 100%);
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-2xl">
+    <!-- 标题 -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+        舱单文件处理系统
+      </h1>
+      <p class="text-gray-600">
+        上传舱单文件，自动生成提单确认件和装箱单发票
+      </p>
+    </div>
+
+    <!-- 主卡片 -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+      <!-- 文件上传区域 -->
+      <div class="text-center mb-6">
+        <div class="flex items-center justify-center gap-2 mb-4">
+          <i data-lucide="file-spreadsheet" class="w-5 h-5 text-blue-600"></i>
+          <h2 class="text-xl font-semibold">上传舱单文件</h2>
+        </div>
+        <p class="text-gray-500 text-sm mb-4">支持 .xls 或 .xlsx 格式的舱单文件</p>
+        
+        <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors cursor-pointer" id="dropZone">
+          <input type="file" id="fileInput" accept=".xls,.xlsx" class="hidden">
+          <div class="flex flex-col items-center">
+            <i data-lucide="upload-cloud" class="w-12 h-12 text-gray-400 mb-3"></i>
+            <p class="text-gray-500 mb-2">点击或拖拽文件到此处</p>
+            <button onclick="event.stopPropagation(); document.getElementById('fileInput').click()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+              选择文件
+            </button>
+          </div>
+        </div>
+        
+        <!-- 文件名显示 -->
+        <div id="fileInfo" class="hidden mt-4 p-3 bg-green-50 rounded-lg">
+          <div class="flex items-center justify-center gap-2 text-green-600">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            <span id="fileName" class="text-sm"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 处理按钮 -->
+      <button id="processBtn" onclick="processFile()" disabled class="w-full h-12 text-white font-medium rounded-xl btn-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <i data-lucide="play" class="w-4 h-4"></i>
+        <span>开始处理</span>
+      </button>
+
+      <!-- 加载状态 -->
+      <div id="loading" class="hidden mt-6 text-center">
+        <div class="inline-flex items-center gap-2 text-blue-600">
+          <svg class="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span>处理中，请稍候...</span>
+        </div>
+      </div>
+
+      <!-- 错误提示 -->
+      <div id="error" class="hidden mt-6 p-4 bg-red-50 rounded-xl text-center">
+        <div class="flex items-center justify-center gap-2 text-red-600">
+          <i data-lucide="alert-circle" class="w-5 h-5"></i>
+          <span id="errorMsg"></span>
+        </div>
+      </div>
+
+      <!-- 下载区域 -->
+      <div id="downloadArea" class="hidden mt-6 pt-6 border-t border-gray-200">
+        <p class="text-center text-sm text-gray-500 mb-4">文件已生成，点击下载</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- 提单确认件 -->
+          <div class="border-2 border-purple-200 rounded-xl p-4 card-hover transition-all">
+            <div class="flex flex-col items-center text-center">
+              <i data-lucide="file-text" class="w-10 h-10 text-purple-600 mb-2"></i>
+              <h3 class="font-semibold mb-3">提单确认件</h3>
+              <button id="downloadWord" onclick="downloadWordFile()" class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>下载文件</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 装箱单发票 -->
+          <div class="border-2 border-green-200 rounded-xl p-4 card-hover transition-all">
+            <div class="flex flex-col items-center text-center">
+              <i data-lucide="file-spreadsheet" class="w-10 h-10 text-green-600 mb-2"></i>
+              <h3 class="font-semibold mb-3">装箱单发票</h3>
+              <button id="downloadExcel" onclick="downloadExcelFile()" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>下载文件</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="mt-6 text-center text-sm text-gray-500">
+      <p>使用流程：上传舱单 → 点击处理 → 下载生成的文件</p>
+    </div>
+  </div>
+
+  <script>
+    // 初始化图标
+    lucide.createIcons();
+
+    let selectedFile = null;
+    let wordFileUrl = null;
+    let excelFileUrl = null;
+
+    // 文件选择处理
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const processBtn = document.getElementById('processBtn');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const errorMsg = document.getElementById('errorMsg');
+    const downloadArea = document.getElementById('downloadArea');
+
+    // 点击上传区域
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // 文件选择
+    fileInput.addEventListener('change', (e) => {
+      handleFileSelect(e.target.files[0]);
+    });
+
+    // 拖拽处理
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-blue-400', 'bg-blue-50');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+      handleFileSelect(e.dataTransfer.files[0]);
+    });
+
+    function handleFileSelect(file) {
+      if (!file) return;
+      
+      // 检查文件格式
+      const validTypes = ['.xls', '.xlsx'];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!validTypes.includes(ext)) {
+        showError('请上传 .xls 或 .xlsx 格式的文件');
+        return;
+      }
+
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileInfo.classList.remove('hidden');
+      processBtn.disabled = false;
+      error.classList.add('hidden');
+      downloadArea.classList.add('hidden');
+      lucide.createIcons();
+    }
+
+    function showError(message) {
+      errorMsg.textContent = message;
+      error.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    async function processFile() {
+      if (!selectedFile) {
+        showError('请先选择文件');
+        return;
+      }
+
+      // 显示加载状态
+      processBtn.disabled = true;
+      loading.classList.remove('hidden');
+      error.classList.add('hidden');
+      downloadArea.classList.add('hidden');
+
+      try {
+        const formData = new FormData();
+        formData.append('manifest', selectedFile);
+
+        const response = await fetch('/api/process', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // 保存文件 URL
+          wordFileUrl = result.wordFileUrl;
+          excelFileUrl = result.excelFileUrl;
+          downloadArea.classList.remove('hidden');
+          lucide.createIcons();
+        } else {
+          showError(result.message || '处理失败');
+        }
+      } catch (err) {
+        showError('处理失败，请重试');
+        console.error(err);
+      } finally {
+        loading.classList.add('hidden');
+        processBtn.disabled = false;
+      }
+    }
+
+    // 下载 Word 文件
+    function downloadWordFile() {
+      if (wordFileUrl) {
+        // 创建隐藏的 iframe 进行下载
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = wordFileUrl;
+        document.body.appendChild(iframe);
+        // 下载后移除
+        setTimeout(() => document.body.removeChild(iframe), 5000);
+      }
+    }
+
+    // 下载 Excel 文件
+    function downloadExcelFile() {
+      if (excelFileUrl) {
+        // 创建隐藏的 iframe 进行下载
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = excelFileUrl;
+        document.body.appendChild(iframe);
+        // 下载后移除
+        setTimeout(() => document.body.removeChild(iframe), 5000);
+      }
+    }
+
+  </script>
+</body>
+</html>
