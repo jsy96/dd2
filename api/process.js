@@ -1,34 +1,17 @@
-// Vercel serverless function entry point
-const express = require('express');
+// Vercel serverless function for processing manifest files
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const os = require('os');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// 中间件
-app.use(express.json());
-
 // Vercel serverless 环境使用 /tmp 目录
-const tmpDir = '/tmp/uploads';
 const outputDir = '/tmp/output';
 
 // 确保临时目录存在
-fs.mkdir(tmpDir, { recursive: true }).catch(() => {});
 fs.mkdir(outputDir, { recursive: true }).catch(() => {});
-
-// 配置文件上传（使用内存存储，适合 serverless）
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB 限制
-});
 
 // 解析舱单 Excel 文件
 function parseManifestExcel(buffer) {
@@ -49,45 +32,31 @@ function parseManifestExcel(buffer) {
   };
 
   const data = {
-    // 行4: 船名,航次,目的港
     船名: getCellValue(3, 1),
     航次: getCellValue(3, 4),
     目的港: getCellValue(3, 7),
-
-    // 行5: 总提单号
     提单号: getCellValue(4, 1),
-
-    // 行13: 箱号,封号,箱型
     箱号: getCellValue(12, 0),
     封号: getCellValue(12, 1),
     箱型: getCellValue(12, 2),
-
-    // 行21: 英文品名,件数,毛重,体积
     英文品名: getCellValue(20, 4),
     件数: getCellValue(20, 6),
     包装单位: getCellValue(20, 7),
     毛重: getCellValue(20, 8),
     体积: getCellValue(20, 9),
     唛头: getCellValue(20, 10),
-
-    // 发货人信息
     发货人名称: getCellValue(27, 2),
     发货人地址: getCellValue(28, 2),
     发货人电话: getCellValue(30, 2),
-
-    // 收货人信息
     收货人名称: getCellValue(34, 2),
     收货人地址: getCellValue(35, 2),
     收货人电话: getCellValue(37, 2),
     收货人联系人: getCellValue(39, 2),
-
-    // 通知人信息
     通知人名称: getCellValue(43, 2),
     通知人地址: getCellValue(44, 2),
     通知人电话: getCellValue(46, 2),
   };
 
-  // 组合完整信息
   data.发货人 = [
     data.发货人名称,
     data.发货人地址,
@@ -112,7 +81,6 @@ function parseManifestExcel(buffer) {
 
 // 生成 Word 文档
 async function generateWordDocument(data) {
-  // Vercel serverless 中读取模板文件
   const templatePath = path.join(__dirname, '../templates/提单确认件的格式.docx');
   const templateBuffer = await fs.readFile(templatePath);
 
@@ -122,7 +90,6 @@ async function generateWordDocument(data) {
     linebreaks: true,
   });
 
-  // 商品列表
   const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
   const goodsData = {};
   for (let i = 1; i <= 22; i++) {
@@ -175,12 +142,10 @@ async function generateExcelDocument(data) {
     throw new Error('无法加载 Excel 模板');
   }
 
-  // 生成日期
   const today = new Date();
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const formattedDate = `${months[today.getMonth()]}. ${String(today.getDate()).padStart(2, '0')}. ${today.getFullYear()}`;
 
-  // 获取单元格文本
   const getCellText = (cell) => {
     if (!cell.value) return '';
     if (typeof cell.value === 'string') return cell.value;
@@ -190,7 +155,6 @@ async function generateExcelDocument(data) {
     return '';
   };
 
-  // 替换占位符
   const replacePlaceholder = (cell, placeholder, replacement) => {
     const text = getCellText(cell);
     if (text.includes(placeholder)) {
@@ -209,14 +173,12 @@ async function generateExcelDocument(data) {
     return false;
   };
 
-  // 填充发票日期
   worksheet.eachRow((row, rowNumber) => {
     row.eachCell((cell) => {
       replacePlaceholder(cell, '{发票日期}', formattedDate);
     });
   });
 
-  // 填充商品列表
   const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
   for (let i = 0; i < 22; i++) {
     const rowNum = 12 + i;
@@ -234,24 +196,33 @@ async function generateExcelDocument(data) {
   return workbook.xlsx.writeBuffer();
 }
 
-// API: 处理舱单文件
-app.post('/api/process', upload.single('manifest'), async (req, res) => {
+// Export for Vercel
+module.exports = async (req, res) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
+  }
+
   try {
-    if (!req.file) {
+    // Parse multipart form data
+    const formData = await parseFormData(req);
+
+    const manifestFile = formData.files.manifest;
+    if (!manifestFile) {
       return res.status(400).json({ success: false, message: '请上传舱单文件' });
     }
 
-    // 读取上传的文件（内存中）
-    const manifestBuffer = req.file.buffer;
-
-    // 解析舱单数据
-    const cargoData = parseManifestExcel(manifestBuffer);
-
-    // 生成文件
+    const cargoData = parseManifestExcel(manifestFile.buffer);
     const wordBuffer = await generateWordDocument(cargoData);
     const excelBuffer = await generateExcelDocument(cargoData);
 
-    // 保存文件到 /tmp
     const timestamp = Date.now();
     const wordFileName = `提单确认件_${timestamp}.doc`;
     const excelFileName = `装箱单发票_${timestamp}.xls`;
@@ -262,6 +233,7 @@ app.post('/api/process', upload.single('manifest'), async (req, res) => {
     await fs.writeFile(wordFilePath, wordBuffer);
     await fs.writeFile(excelFilePath, excelBuffer);
 
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({
       success: true,
       message: '文件处理成功',
@@ -271,93 +243,34 @@ app.post('/api/process', upload.single('manifest'), async (req, res) => {
     });
   } catch (error) {
     console.error('处理文件失败:', error);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(500).json({ success: false, message: '处理文件失败，请检查文件格式' });
   }
-});
+};
 
-// API: 重新生成文件
-app.post('/api/regenerate', async (req, res) => {
-  try {
-    const cargoData = req.body.data;
+// Helper to parse form data
+async function parseFormData(req) {
+  const Busboy = require('busboy');
+  return new Promise((resolve, reject) => {
+    const busboy = Busboy({ headers: req.headers });
+    const files = {};
+    const fields = {};
 
-    if (!cargoData) {
-      return res.status(400).json({ success: false, message: '缺少数据' });
-    }
-
-    // 生成文件
-    const wordBuffer = await generateWordDocument(cargoData);
-    const excelBuffer = await generateExcelDocument(cargoData);
-
-    // 保存文件
-    const timestamp = Date.now();
-    const wordFileName = `提单确认件_${timestamp}.doc`;
-    const excelFileName = `装箱单发票_${timestamp}.xls`;
-
-    const wordFilePath = path.join(outputDir, wordFileName);
-    const excelFilePath = path.join(outputDir, excelFileName);
-
-    await fs.writeFile(wordFilePath, wordBuffer);
-    await fs.writeFile(excelFilePath, excelBuffer);
-
-    res.json({
-      success: true,
-      message: '文件重新生成成功',
-      wordFileUrl: `/api/download?file=${encodeURIComponent(wordFileName)}`,
-      excelFileUrl: `/api/download?file=${encodeURIComponent(excelFileName)}`,
+    busboy.on('file', (fieldname, file, info) => {
+      const chunks = [];
+      file.on('data', (chunk) => chunks.push(chunk));
+      file.on('end', () => {
+        files[fieldname] = { buffer: Buffer.concat(chunks), ...info };
+      });
     });
-  } catch (error) {
-    console.error('重新生成文件失败:', error);
-    res.status(500).json({ success: false, message: '重新生成文件失败' });
-  }
-});
 
-// API: 下载文件
-app.get('/api/download', async (req, res) => {
-  try {
-    const filename = req.query.file;
-    if (!filename) {
-      return res.status(400).json({ success: false, message: '缺少文件名' });
-    }
+    busboy.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
 
-    const filePath = path.join(outputDir, filename);
+    busboy.on('finish', () => resolve({ files, fields }));
+    busboy.on('error', reject);
 
-    // 检查文件是否存在
-    try {
-      await fs.access(filePath);
-    } catch {
-      console.error('文件不存在:', filePath);
-      return res.status(404).json({ success: false, message: '文件不存在' });
-    }
-
-    // 读取文件
-    const fileBuffer = await fs.readFile(filePath);
-
-    // 根据文件扩展名设置 MIME 类型
-    const ext = path.extname(filename).toLowerCase();
-    let contentType = 'application/octet-stream';
-    if (ext === '.doc' || ext === '.docx') {
-      contentType = 'application/msword';
-    } else if (ext === '.xls' || ext === '.xlsx') {
-      contentType = 'application/vnd.ms-excel';
-    }
-
-    // 设置响应头（兼容手机浏览器）
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', fileBuffer.length);
-
-    // Content-Disposition 支持 UTF-8 文件名 (RFC 5987)
-    const encodedFileName = encodeURIComponent(filename);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFileName}`);
-
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Accept-Ranges', 'bytes');
-
-    res.send(fileBuffer);
-  } catch (error) {
-    console.error('下载文件失败:', error);
-    res.status(500).json({ success: false, message: '下载文件失败' });
-  }
-});
-
-// 导出为 Vercel serverless 函数
-module.exports = app;
+    req.pipe(busboy);
+  });
+}
