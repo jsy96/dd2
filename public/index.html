@@ -240,26 +240,26 @@
     // 下载 Word 文件
     function downloadWordFile() {
       if (wordFileUrl) {
-        // 创建隐藏的 iframe 进行下载
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = wordFileUrl;
-        document.body.appendChild(iframe);
-        // 下载后移除
-        setTimeout(() => document.body.removeChild(iframe), 5000);
+        // 使用 a 标签下载
+        const link = document.createElement('a');
+        link.href = wordFileUrl;
+        link.download = '提单确认件.doc';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
     }
 
     // 下载 Excel 文件
     function downloadExcelFile() {
       if (excelFileUrl) {
-        // 创建隐藏的 iframe 进行下载
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = excelFileUrl;
-        document.body.appendChild(iframe);
-        // 下载后移除
-        setTimeout(() => document.body.removeChild(iframe), 5000);
+        // 使用 a 标签下载
+        const link = document.createElement('a');
+        link.href = excelFileUrl;
+        link.download = '装箱单发票.xlsx';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
     }
 
