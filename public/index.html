@@ -45,10 +45,10 @@
         <p class="text-gray-500 text-sm mb-4">支持 .xls 或 .xlsx 格式的舱单文件</p>
         
         <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors cursor-pointer" id="dropZone">
-          <input type="file" id="fileInput" accept=".xls,.xlsx" class="hidden">
+          <input type="file" id="fileInput" accept=".xls,.xlsx" multiple class="hidden">
           <div class="flex flex-col items-center">
             <i data-lucide="upload-cloud" class="w-12 h-12 text-gray-400 mb-3"></i>
-            <p class="text-gray-500 mb-2">点击或拖拽文件到此处</p>
+            <p class="text-gray-500 mb-2">点击或拖拽文件到此处（支持多选）</p>
             <button onclick="event.stopPropagation(); document.getElementById('fileInput').click()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
               选择文件
             </button>
@@ -57,9 +57,12 @@
         
         <!-- 文件名显示 -->
         <div id="fileInfo" class="hidden mt-4 p-3 bg-green-50 rounded-lg">
-          <div class="flex items-center justify-center gap-2 text-green-600">
-            <i data-lucide="check-circle" class="w-4 h-4"></i>
-            <span id="fileName" class="text-sm"></span>
+          <div class="flex items-start justify-center gap-2 text-green-600">
+            <i data-lucide="check-circle" class="w-4 h-4 mt-0.5"></i>
+            <div class="text-sm">
+              <div id="fileCount" class="font-medium mb-1"></div>
+              <div id="fileList" class="text-left max-h-32 overflow-y-auto"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -92,27 +95,15 @@
       <!-- 下载区域 -->
       <div id="downloadArea" class="hidden mt-6 pt-6 border-t border-gray-200">
         <p class="text-center text-sm text-gray-500 mb-4">文件已生成，点击下载</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- 提单确认件 -->
-          <div class="border-2 border-purple-200 rounded-xl p-4 card-hover transition-all">
+        <div class="flex justify-center">
+          <div class="border-2 border-blue-200 rounded-xl p-6 card-hover transition-all max-w-md w-full">
             <div class="flex flex-col items-center text-center">
-              <i data-lucide="file-text" class="w-10 h-10 text-purple-600 mb-2"></i>
-              <h3 class="font-semibold mb-3">提单确认件</h3>
-              <button id="downloadWord" onclick="downloadWordFile()" class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>下载文件</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- 装箱单发票 -->
-          <div class="border-2 border-green-200 rounded-xl p-4 card-hover transition-all">
-            <div class="flex flex-col items-center text-center">
-              <i data-lucide="file-spreadsheet" class="w-10 h-10 text-green-600 mb-2"></i>
-              <h3 class="font-semibold mb-3">装箱单发票</h3>
-              <button id="downloadExcel" onclick="downloadExcelFile()" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>下载文件</span>
+              <i data-lucide="archive" class="w-12 h-12 text-blue-600 mb-3"></i>
+              <h3 class="font-semibold mb-2">批量处理结果</h3>
+              <p class="text-sm text-gray-500 mb-4" id="processedCount"></p>
+              <button id="downloadZip" onclick="downloadZipFile()" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                <i data-lucide="download" class="w-5 h-5"></i>
+                <span>下载 ZIP 压缩包</span>
               </button>
             </div>
           </div>
@@ -130,15 +121,15 @@
     // 初始化图标
     lucide.createIcons();
 
-    let selectedFile = null;
-    let wordFileBase64 = null;
-    let excelFileBase64 = null;
+    let selectedFiles = [];
+    let zipFileBase64 = null;
 
     // 文件选择处理
     const fileInput = document.getElementById('fileInput');
     const dropZone = document.getElementById('dropZone');
     const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
+    const fileCount = document.getElementById('fileCount');
+    const fileList = document.getElementById('fileList');
     const processBtn = document.getElementById('processBtn');
     const loading = document.getElementById('loading');
     const error = document.getElementById('error');
@@ -150,7 +141,7 @@
 
     // 文件选择
     fileInput.addEventListener('change', (e) => {
-      handleFileSelect(e.target.files[0]);
+      handleFileSelect(Array.from(e.target.files));
     });
 
     // 拖拽处理
@@ -167,22 +158,44 @@
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('border-blue-400', 'bg-blue-50');
-      handleFileSelect(e.dataTransfer.files[0]);
+      handleFileSelect(Array.from(e.dataTransfer.files));
     });
 
-    function handleFileSelect(file) {
-      if (!file) return;
-      
-      // 检查文件格式
+    function handleFileSelect(files) {
+      if (!files || files.length === 0) return;
+
+      // 检查每个文件格式
       const validTypes = ['.xls', '.xlsx'];
-      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      if (!validTypes.includes(ext)) {
+      const invalidFiles = [];
+      const validFiles = [];
+
+      for (const file of files) {
+        const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (!validTypes.includes(ext)) {
+          invalidFiles.push(file.name);
+        } else {
+          validFiles.push(file);
+        }
+      }
+
+      if (invalidFiles.length > 0) {
+        showError(`以下文件格式不支持: ${invalidFiles.join(', ')}`);
+        return;
+      }
+
+      if (validFiles.length === 0) {
         showError('请上传 .xls 或 .xlsx 格式的文件');
         return;
       }
 
-      selectedFile = file;
-      fileName.textContent = file.name;
+      selectedFiles = validFiles;
+
+      // 更新文件信息显示
+      fileCount.textContent = `已选择 ${validFiles.length} 个文件`;
+      fileList.innerHTML = validFiles.map(file =>
+        `<div class="truncate" title="${file.name}">• ${file.name}</div>`
+      ).join('');
+
       fileInfo.classList.remove('hidden');
       processBtn.disabled = false;
       error.classList.add('hidden');
@@ -197,7 +210,7 @@
     }
 
     async function processFile() {
-      if (!selectedFile) {
+      if (!selectedFiles || selectedFiles.length === 0) {
         showError('请先选择文件');
         return;
       }
@@ -210,7 +223,10 @@
 
       try {
         const formData = new FormData();
-        formData.append('manifest', selectedFile);
+        // 添加所有文件到同一个字段名（支持多文件上传）
+        selectedFiles.forEach(file => {
+          formData.append('manifest', file);
+        });
 
         const response = await fetch('/api/process', {
           method: 'POST',
@@ -220,9 +236,13 @@
         const result = await response.json();
 
         if (result.success) {
-          // 保存文件 base64 数据
-          wordFileBase64 = result.wordFileBase64;
-          excelFileBase64 = result.excelFileBase64;
+          // 保存 ZIP 文件 base64 数据
+          zipFileBase64 = result.zipFileBase64;
+          // 更新处理文件数量显示
+          const processedCount = document.getElementById('processedCount');
+          if (processedCount) {
+            processedCount.textContent = `已处理 ${result.fileCount || selectedFiles.length} 个文件`;
+          }
           downloadArea.classList.remove('hidden');
           lucide.createIcons();
         } else {
@@ -264,16 +284,10 @@
       }
     }
 
-    // 下载 Word 文档
-    function downloadWordFile() {
-      if (!wordFileBase64) return;
-      downloadBase64File(wordFileBase64, '提单确认件.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    }
-
-    // 下载 Excel 文档
-    function downloadExcelFile() {
-      if (!excelFileBase64) return;
-      downloadBase64File(excelFileBase64, '装箱单发票.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    // 下载 ZIP 压缩包
+    function downloadZipFile() {
+      if (!zipFileBase64) return;
+      downloadBase64File(zipFileBase64, '批量处理结果.zip', 'application/zip');
     }
 
   </script>

@@ -1,10 +1,12 @@
 // Vercel serverless function for processing manifest files
 const path = require('path');
 const fs = require('fs').promises;
+const stream = require('stream');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
+const archiver = require('archiver');
 
 // 解析舱单 Excel 文件
 function parseManifestExcel(buffer) {
@@ -253,26 +255,64 @@ module.exports = async (req, res) => {
   try {
     const formData = await parseFormData(req);
 
-    const manifestFile = formData.files.manifest;
-    if (!manifestFile) {
+    const manifestFiles = formData.files.manifest;
+    if (!manifestFiles || (Array.isArray(manifestFiles) && manifestFiles.length === 0) || manifestFiles.length === 0) {
       return res.status(400).json({ success: false, message: '请上传舱单文件' });
     }
 
-    const cargoData = parseManifestExcel(manifestFile.buffer);
-    const wordBuffer = await generateWordDocument(cargoData);
-    const excelBuffer = await generateExcelDocument(cargoData);
+    // 确保是数组
+    const files = Array.isArray(manifestFiles) ? manifestFiles : [manifestFiles];
 
-    // 将文件转换为 base64 并直接返回
-    const wordBase64 = bufferToBase64(wordBuffer);
-    const excelBase64 = bufferToBase64(excelBuffer);
+    console.log(`开始批量处理 ${files.length} 个文件`);
+
+    // 创建 ZIP 归档
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const chunks = [];
+    archive.on('data', (chunk) => chunks.push(chunk));
+
+    const zipPromise = new Promise((resolve, reject) => {
+      archive.on('end', () => {
+        const zipBuffer = Buffer.concat(chunks);
+        resolve(zipBuffer);
+      });
+      archive.on('error', reject);
+    });
+
+    // 处理每个文件
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`处理第 ${i + 1} 个文件: ${file.filename || '未命名文件'}`);
+
+      try {
+        const cargoData = parseManifestExcel(file.buffer);
+        const wordBuffer = await generateWordDocument(cargoData);
+        const excelBuffer = await generateExcelDocument(cargoData);
+
+        // 生成文件名（使用提单号或索引）
+        const baseName = cargoData.提单号 ? cargoData.提单号.replace(/[^a-zA-Z0-9]/g, '_') : `file_${i + 1}`;
+
+        // 添加到 ZIP
+        archive.append(wordBuffer, { name: `${baseName}_提单确认件.docx` });
+        archive.append(excelBuffer, { name: `${baseName}_装箱单发票.xlsx` });
+
+        console.log(`文件 ${i + 1} 处理完成: ${baseName}`);
+      } catch (fileError) {
+        console.error(`处理文件 ${i + 1} 失败:`, fileError);
+        throw new Error(`第 ${i + 1} 个文件处理失败: ${fileError.message}`);
+      }
+    }
+
+    // 完成 ZIP 归档
+    await archive.finalize();
+    const zipBuffer = await zipPromise;
+    const zipBase64 = bufferToBase64(zipBuffer);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({
       success: true,
-      message: '文件处理成功',
-      data: cargoData,
-      wordFileBase64: wordBase64,
-      excelFileBase64: excelBase64,
+      message: `批量处理完成，共处理 ${files.length} 个文件`,
+      zipFileBase64: zipBase64,
+      fileCount: files.length,
     });
   } catch (error) {
     console.error('处理文件失败:', error);
@@ -293,7 +333,15 @@ async function parseFormData(req) {
       const chunks = [];
       file.on('data', (chunk) => chunks.push(chunk));
       file.on('end', () => {
-        files[fieldname] = { buffer: Buffer.concat(chunks), ...info };
+        const fileData = { buffer: Buffer.concat(chunks), ...info };
+        if (!files[fieldname]) {
+          files[fieldname] = [fileData];
+        } else if (Array.isArray(files[fieldname])) {
+          files[fieldname].push(fileData);
+        } else {
+          // 如果已存在但不是数组，转换为数组
+          files[fieldname] = [files[fieldname], fileData];
+        }
       });
     });
 
