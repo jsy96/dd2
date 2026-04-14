@@ -296,7 +296,8 @@ module.exports = async (req, res) => {
         archive.append(wordBuffer, { name: `A/B/${safeBillName}.docx` });
         archive.append(excelBuffer, { name: `A/C/${safeContainerName}.xlsx` });
 
-        console.log(`文件 ${i + 1} 处理完成: ${baseName}`);
+        console.log(`文件 ${i + 1} 处理完成: 提单号=${cargoData.提单号}, 箱号=${cargoData.箱号}`);
+        console.log(`  文件名: B/${safeBillName}.docx, C/${safeContainerName}.xlsx`);
       } catch (fileError) {
         console.error(`处理文件 ${i + 1} 失败:`, fileError);
         throw new Error(`第 ${i + 1} 个文件处理失败: ${fileError.message}`);
