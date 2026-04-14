@@ -288,12 +288,13 @@ module.exports = async (req, res) => {
         const wordBuffer = await generateWordDocument(cargoData);
         const excelBuffer = await generateExcelDocument(cargoData);
 
-        // 生成文件名（使用提单号或索引）
-        const baseName = cargoData.提单号 ? cargoData.提单号.replace(/[^a-zA-Z0-9]/g, '_') : `file_${i + 1}`;
+        // 生成安全文件名
+        const safeBillName = cargoData.提单号 ? cargoData.提单号.replace(/[^a-zA-Z0-9]/g, '_') : `bill_${i + 1}`;
+        const safeContainerName = cargoData.箱号 ? cargoData.箱号.replace(/[^a-zA-Z0-9]/g, '_') : `container_${i + 1}`;
 
-        // 添加到 ZIP
-        archive.append(wordBuffer, { name: `${baseName}_提单确认件.docx` });
-        archive.append(excelBuffer, { name: `${baseName}_装箱单发票.xlsx` });
+        // 添加到 ZIP，按文件夹结构组织
+        archive.append(wordBuffer, { name: `A/B/${safeBillName}.docx` });
+        archive.append(excelBuffer, { name: `A/C/${safeContainerName}.xlsx` });
 
         console.log(`文件 ${i + 1} 处理完成: ${baseName}`);
       } catch (fileError) {
