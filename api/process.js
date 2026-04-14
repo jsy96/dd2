@@ -162,29 +162,29 @@ async function generateExcelDocument(data) {
     return false;
   };
 
+  // 准备替换数据
+  const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
+  const replacementData = {
+    '{发票日期}': formattedDate
+  };
+
+  // 添加商品占位符替换数据
+  for (let i = 1; i <= 22; i++) {
+    const placeholder = `{商品${i}}`;
+    replacementData[placeholder] = goodsList[i - 1] || '';
+  }
+
   // 处理所有 sheet
   workbook.worksheets.forEach((worksheet) => {
-    // 替换发票日期
+    // 遍历所有行和单元格
     worksheet.eachRow((row, rowNumber) => {
       row.eachCell((cell) => {
-        replacePlaceholder(cell, '{发票日期}', formattedDate);
+        // 尝试替换所有可能的占位符
+        for (const [placeholder, replacement] of Object.entries(replacementData)) {
+          replacePlaceholder(cell, placeholder, replacement);
+        }
       });
     });
-
-    // 替换商品占位符
-    const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
-    for (let i = 0; i < 22; i++) {
-      const rowNum = 12 + i;
-      const row = worksheet.getRow(rowNum);
-      const cell = row.getCell(5);
-      const placeholder = `{商品${i + 1}}`;
-
-      if (i < goodsList.length) {
-        replacePlaceholder(cell, placeholder, goodsList[i]);
-      } else {
-        replacePlaceholder(cell, placeholder, '');
-      }
-    }
   });
 
   return workbook.xlsx.writeBuffer();
