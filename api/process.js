@@ -174,18 +174,60 @@ async function generateExcelDocument(data) {
     replacementData[placeholder] = goodsList[i - 1] || '';
   }
 
+  console.log('替换数据:', {
+    英文品名: data.英文品名,
+    商品列表长度: goodsList.length,
+    商品列表内容: goodsList,
+    占位符数量: Object.keys(replacementData).length,
+    占位符列表: Object.keys(replacementData)
+  });
+
   // 处理所有 sheet
-  workbook.worksheets.forEach((worksheet) => {
+  workbook.worksheets.forEach((worksheet, sheetIndex) => {
+    let replacedCount = 0;
     // 遍历所有行和单元格
     worksheet.eachRow((row, rowNumber) => {
       row.eachCell((cell) => {
         // 尝试替换所有可能的占位符
         for (const [placeholder, replacement] of Object.entries(replacementData)) {
-          replacePlaceholder(cell, placeholder, replacement);
+          if (replacePlaceholder(cell, placeholder, replacement)) {
+            replacedCount++;
+          }
         }
       });
     });
+    console.log(`Sheet ${sheetIndex + 1} "${worksheet.name}" 替换了 ${replacedCount} 个占位符`);
   });
+
+  // 专门处理 PACKING LIST 工作表的 B11-B32 单元格
+  const packingListSheet = workbook.getWorksheet('PACKING LIST') || workbook.worksheets[1];
+  if (packingListSheet) {
+    console.log(`专门处理 PACKING LIST 工作表: ${packingListSheet.name}`);
+    let specificReplaced = 0;
+    for (let row = 11; row <= 32; row++) {
+      const cell = packingListSheet.getCell(`B${row}`);
+      const placeholderIndex = row - 10; // B11 对应商品1, B12 对应商品2...
+      const placeholder = `{商品${placeholderIndex}}`;
+      const replacement = replacementData[placeholder] || '';
+
+      if (replacePlaceholder(cell, placeholder, replacement)) {
+        specificReplaced++;
+      } else {
+        // 如果没找到占位符，直接设置单元格值
+        const cellText = getCellText(cell);
+        if (cellText.includes('{商品')) {
+          // 单元格包含其他商品占位符，尝试替换所有可能的占位符
+          for (const [ph, repl] of Object.entries(replacementData)) {
+            if (replacePlaceholder(cell, ph, repl)) {
+              specificReplaced++;
+              break;
+            }
+          }
+        }
+      }
+    }
+    console.log(`PACKING LIST 工作表 B11-B32 替换了 ${specificReplaced} 个单元格`);
+  }
 
   return workbook.xlsx.writeBuffer();
 }
