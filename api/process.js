@@ -97,9 +97,6 @@ async function generateWordDocument(data) {
     箱号: data.箱号,
     封号: data.封号,
     箱型: data.箱型,
-    发货人: data.发货人,
-    收货人: data.收货人,
-    通知人: data.通知人,
     件数: data.件数,
     毛重: data.毛重,
     体积: data.体积,
@@ -129,9 +126,8 @@ async function generateExcelDocument(data) {
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(templateBuffer);
-  const worksheet = workbook.worksheets[0];
 
-  if (!worksheet) {
+  if (workbook.worksheets.length === 0) {
     throw new Error('无法加载 Excel 模板');
   }
 
@@ -166,25 +162,30 @@ async function generateExcelDocument(data) {
     return false;
   };
 
-  worksheet.eachRow((row, rowNumber) => {
-    row.eachCell((cell) => {
-      replacePlaceholder(cell, '{发票日期}', formattedDate);
+  // 处理所有 sheet
+  workbook.worksheets.forEach((worksheet) => {
+    // 替换发票日期
+    worksheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        replacePlaceholder(cell, '{发票日期}', formattedDate);
+      });
     });
-  });
 
-  const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
-  for (let i = 0; i < 22; i++) {
-    const rowNum = 12 + i;
-    const row = worksheet.getRow(rowNum);
-    const cell = row.getCell(5);
-    const placeholder = `{商品${i + 1}}`;
+    // 替换商品占位符
+    const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
+    for (let i = 0; i < 22; i++) {
+      const rowNum = 12 + i;
+      const row = worksheet.getRow(rowNum);
+      const cell = row.getCell(5);
+      const placeholder = `{商品${i + 1}}`;
 
-    if (i < goodsList.length) {
-      replacePlaceholder(cell, placeholder, goodsList[i]);
-    } else {
-      replacePlaceholder(cell, placeholder, '');
+      if (i < goodsList.length) {
+        replacePlaceholder(cell, placeholder, goodsList[i]);
+      } else {
+        replacePlaceholder(cell, placeholder, '');
+      }
     }
-  }
+  });
 
   return workbook.xlsx.writeBuffer();
 }
