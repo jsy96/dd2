@@ -120,11 +120,17 @@ async function generateWordDocument(data) {
     linebreaks: true,
   });
 
-  // 商品列表
-  const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
+  // 商品列表 - 严格按舱单文件中的英文品名数量处理
+  const englishNames = data.英文品名 || '';
+  const goodsList = englishNames.split(',').map(s => s.trim()).filter(item => item !== '');
+  // 确保商品数量不超过22个，如果超过则截断并记录警告
+  if (goodsList.length > 22) {
+    console.warn(`警告：舱单文件中有 ${goodsList.length} 个英文品名，但模板只支持22个商品。将截断超出的部分。`);
+  }
   const goodsData = {};
   for (let i = 1; i <= 22; i++) {
-    goodsData[`商品${i}`] = goodsList[i - 1] || '';
+    // 只使用舱单文件中存在的商品，不存在则设置为空字符串
+    goodsData[`商品${i}`] = i <= goodsList.length ? goodsList[i - 1] : '';
   }
 
   doc.setData({
@@ -214,19 +220,22 @@ async function generateExcelDocument(data) {
     });
   });
 
-  // 填充商品列表
-  const goodsList = data.英文品名.split(',').map(s => s.trim()).filter(Boolean);
+  // 填充商品列表 - 严格按舱单文件中的英文品名数量处理
+  const englishNames = data.英文品名 || '';
+  const goodsList = englishNames.split(',').map(s => s.trim()).filter(item => item !== '');
+  // 确保商品数量不超过22个，如果超过则截断并记录警告
+  if (goodsList.length > 22) {
+    console.warn(`警告：舱单文件中有 ${goodsList.length} 个英文品名，但模板只支持22个商品。将截断超出的部分。`);
+  }
   for (let i = 0; i < 22; i++) {
     const rowNum = 12 + i;
     const row = worksheet.getRow(rowNum);
     const cell = row.getCell(5);
     const placeholder = `{商品${i + 1}}`;
-    
-    if (i < goodsList.length) {
-      replacePlaceholder(cell, placeholder, goodsList[i]);
-    } else {
-      replacePlaceholder(cell, placeholder, '');
-    }
+
+    // 只使用舱单文件中存在的商品，不存在则设置为空字符串
+    const goodsValue = i < goodsList.length ? goodsList[i] : '';
+    replacePlaceholder(cell, placeholder, goodsValue);
   }
 
   return workbook.xlsx.writeBuffer();
