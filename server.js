@@ -106,6 +106,10 @@ function parseManifestExcel(buffer) {
     `TEL: ${data.通知人电话}`
   ].filter(Boolean).join('\n');
 
+  // 调试日志
+  console.log('DEBUG parseManifestExcel: 英文品名原始值:', JSON.stringify(data.英文品名));
+  console.log('DEBUG parseManifestExcel: 解析后商品列表长度:', data.英文品名 ? data.英文品名.split(',').map(s => s.trim()).filter(item => item !== '').length : 0);
+
   return data;
 }
 
@@ -132,6 +136,11 @@ async function generateWordDocument(data) {
     // 只使用舱单文件中存在的商品，不存在则设置为空字符串
     goodsData[`商品${i}`] = i <= goodsList.length ? goodsList[i - 1] : '';
   }
+
+  // 调试日志
+  console.log('DEBUG Word生成: 英文品名原始值:', JSON.stringify(data.英文品名));
+  console.log('DEBUG Word生成: 解析后商品列表:', JSON.stringify(goodsList));
+  console.log('DEBUG Word生成: 商品数据:', JSON.stringify(goodsData));
 
   doc.setData({
     船名: data.船名,
@@ -237,6 +246,10 @@ async function generateExcelDocument(data) {
     const goodsValue = i < goodsList.length ? goodsList[i] : '';
     replacePlaceholder(cell, placeholder, goodsValue);
   }
+
+  // 调试日志
+  console.log('DEBUG Excel生成: 英文品名原始值:', JSON.stringify(data.英文品名));
+  console.log('DEBUG Excel生成: 解析后商品列表:', JSON.stringify(goodsList));
 
   return workbook.xlsx.writeBuffer();
 }
