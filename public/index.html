@@ -36,6 +36,24 @@
 
     <!-- 主卡片 -->
     <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+      <!-- HS编码文件上传区域 -->
+      <div class="mb-6 p-4 bg-purple-50 rounded-xl border-2 border-purple-200">
+        <div class="flex items-center justify-center gap-2 mb-3">
+          <i data-lucide="database" class="w-5 h-5 text-purple-600"></i>
+          <h3 class="text-lg font-semibold text-purple-900">HS编码映射表</h3>
+        </div>
+        <p class="text-gray-600 text-sm mb-3">上传文本文件，格式：英文品名<Tab>HS编码 或 英文品名,HS编码</p>
+
+        <div class="flex items-center justify-center gap-3">
+          <input type="file" id="hsCodeInput" accept=".txt,.csv" class="hidden">
+          <button onclick="document.getElementById('hsCodeInput').click()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors flex items-center gap-2">
+            <i data-lucide="upload" class="w-4 h-4"></i>
+            <span>选择HS编码文件</span>
+          </button>
+          <div id="hsCodeStatus" class="text-sm text-gray-500">未上传</div>
+        </div>
+      </div>
+
       <!-- 文件上传区域 -->
       <div class="text-center mb-6">
         <div class="flex items-center justify-center gap-2 mb-4">
@@ -123,6 +141,7 @@
 
     let selectedFiles = [];
     let zipFileBase64 = null;
+    let hsCodeMap = null; // HS编码映射表
 
     // 文件选择处理
     const fileInput = document.getElementById('fileInput');
@@ -159,6 +178,54 @@
       e.preventDefault();
       dropZone.classList.remove('border-blue-400', 'bg-blue-50');
       handleFileSelect(Array.from(e.dataTransfer.files));
+    });
+
+    // HS编码文件上传处理
+    const hsCodeInput = document.getElementById('hsCodeInput');
+    const hsCodeStatus = document.getElementById('hsCodeStatus');
+
+    hsCodeInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter(line => line.trim());
+
+        // 解析每一行
+        const map = {};
+        let successCount = 0;
+
+        for (const line of lines) {
+          // 尝试用tab分隔，如果失败则用逗号分隔
+          let parts = line.split('\t');
+          if (parts.length < 2) {
+            parts = line.split(',');
+          }
+
+          if (parts.length >= 2) {
+            const englishName = parts[0].trim();
+            const hsCode = parts[1].trim();
+            if (englishName && hsCode) {
+              map[englishName] = hsCode;
+              successCount++;
+            }
+          }
+        }
+
+        if (successCount > 0) {
+          hsCodeMap = map;
+          hsCodeStatus.innerHTML = `<span class="text-green-600">已加载 ${successCount} 条HS编码</span>`;
+          console.log('HS编码映射表已加载:', Object.keys(map).length, '条');
+        } else {
+          hsCodeStatus.innerHTML = `<span class="text-red-600">文件格式错误</span>`;
+          hsCodeMap = null;
+        }
+      } catch (err) {
+        console.error('解析HS编码文件失败:', err);
+        hsCodeStatus.innerHTML = `<span class="text-red-600">解析失败</span>`;
+        hsCodeMap = null;
+      }
     });
 
     function handleFileSelect(files) {
@@ -227,6 +294,11 @@
         selectedFiles.forEach(file => {
           formData.append('manifest', file);
         });
+
+        // 如果有HS编码映射表，添加到请求中
+        if (hsCodeMap && Object.keys(hsCodeMap).length > 0) {
+          formData.append('hsCodeMap', JSON.stringify(hsCodeMap));
+        }
 
         const response = await fetch('/api/process', {
           method: 'POST',
