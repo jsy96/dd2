@@ -2,19 +2,13 @@
   "name": "manifest-processor",
   "version": "1.0.0",
   "description": "舱单文件处理系统 - 自动生成提单确认件和装箱单发票",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
+  "main": "api/process.js",
+  "scripts": {},
   "dependencies": {
     "archiver": "^7.0.1",
-    "axios": "^1.6.0",
     "busboy": "^1.6.0",
     "docxtemplater": "^3.68.3",
     "exceljs": "^4.4.0",
-    "express": "^4.21.2",
-    "multer": "^1.4.5-lts.1",
     "pizzip": "^3.2.0",
     "xlsx": "^0.18.5"
   },
