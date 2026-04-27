@@ -859,6 +859,101 @@ async function generateSummaryWithHS(firstData, allCargoData, hsCodeMap = null) 
   return doc.getZip().generate({ type: 'nodebuffer' });
 }
 
+// 生成无HS的汇总单 Word 文档
+async function generateSummaryWithoutHS(firstData, allCargoData) {
+  const templatePath = path.join(__dirname, '../templates/无HS的汇总单.docx');
+  const templateBuffer = await fs.readFile(templatePath);
+
+  const zip = new PizZip(templateBuffer);
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    nullGetter: function() {
+      return '';
+    }
+  });
+
+  // 为每个舱单生成无HS的商品列表（商品之间用换行符分隔）
+  const cargoListsWithoutHS = [];
+  for (let i = 0; i < allCargoData.length; i++) {
+    const cargo = allCargoData[i];
+    const englishNames = cargo.英文品名 || '';
+    const goodsList = splitGoodsList(englishNames);
+
+    // 各个商品之间用换行符分隔
+    const cargoListString = goodsList.join('\n');
+    cargoListsWithoutHS.push(cargoListString);
+  }
+
+  // 商品列表数据（最多7个）
+  const goodsListData = {};
+  for (let i = 1; i <= 7; i++) {
+    goodsListData[`无HS的商品列表${i}`] = i <= cargoListsWithoutHS.length ? cargoListsWithoutHS[i - 1] : '';
+  }
+
+  // 计算总件数、总毛重、总体积
+  let totalPieces = 0;
+  let totalWeight = 0;
+  let totalVolume = 0;
+  allCargoData.forEach(cargo => {
+    totalPieces += Number(cargo.件数) || 0;
+    totalWeight += Number(cargo.毛重) || 0;
+    totalVolume += Number(cargo.体积) || 0;
+  });
+
+  // 舱单字段映射（最多7个）
+  const containerData = {};
+  for (let i = 0; i < 7; i++) {
+    const suffix = i + 1;
+    if (i < allCargoData.length) {
+      const cargo = allCargoData[i];
+      containerData[`箱号${suffix}`] = cargo.箱号 || '';
+      containerData[`封号${suffix}`] = cargo.封号 || '';
+      containerData[`箱型${suffix}`] = cargo.箱型 || '';
+      containerData[`件数${suffix}`] = safeToInt(cargo.件数);
+      containerData[`毛重${suffix}`] = safeToInt(cargo.毛重);
+      containerData[`体积${suffix}`] = safeToInt(cargo.体积);
+      containerData[`提单号${suffix}`] = cargo.提单号 || '';
+      // 提单号为空时，单位也设为空
+      if (!cargo.提单号) {
+        containerData[`数量单位${suffix}`] = '';
+        containerData[`重量单位${suffix}`] = '';
+        containerData[`体积单位${suffix}`] = '';
+      } else {
+        containerData[`数量单位${suffix}`] = 'CTNS';
+        containerData[`重量单位${suffix}`] = 'KGS';
+        containerData[`体积单位${suffix}`] = 'CBM/';
+      }
+    } else {
+      containerData[`箱号${suffix}`] = '';
+      containerData[`封号${suffix}`] = '';
+      containerData[`箱型${suffix}`] = '';
+      containerData[`件数${suffix}`] = '';
+      containerData[`毛重${suffix}`] = '';
+      containerData[`体积${suffix}`] = '';
+      containerData[`提单号${suffix}`] = '';
+      containerData[`数量单位${suffix}`] = '';
+      containerData[`重量单位${suffix}`] = '';
+      containerData[`体积单位${suffix}`] = '';
+    }
+  }
+
+  doc.setData({
+    船名: firstData.船名,
+    航次: firstData.航次,
+    目的港: firstData.目的港,
+    提单号: firstData.提单号,
+    总件数: totalPieces.toString(),
+    总毛重: totalWeight.toString(),
+    总体积: totalVolume.toString(),
+    ...goodsListData,
+    ...containerData,
+  });
+
+  doc.render();
+  return doc.getZip().generate({ type: 'nodebuffer' });
+}
+
 // Buffer to base64
 function bufferToBase64(buffer) {
   return buffer.toString('base64');
@@ -970,6 +1065,10 @@ module.exports = async (req, res) => {
         // 生成带HS的汇总单
         const summaryWithHSBuffer = await generateSummaryWithHS(firstCargoData, allCargoData, hsCodeMap);
         archive.append(summaryWithHSBuffer, { name: `A/${safeBillNumber}带HS的汇总单.docx` });
+
+        // 生成无HS的汇总单
+        const summaryWithoutHSBuffer = await generateSummaryWithoutHS(firstCargoData, allCargoData);
+        archive.append(summaryWithoutHSBuffer, { name: `A/${safeBillNumber}无HS的汇总单.docx` });
       } catch (summaryError) {
         console.error('生成汇总文件失败，跳过:', summaryError);
       }
