@@ -468,8 +468,8 @@ async function generateOKBillWithHS(firstData, allCargoData, hsCodeMap = null) {
         }
       });
 
-      // 如果行包含公式或行号是22，不标记删除
-      if (hasEmptyBillNumber && !hasFormula && rowNumber !== 22) {
+      // 如果行包含公式或行号是27，不标记删除
+      if (hasEmptyBillNumber && !hasFormula && rowNumber !== 27) {
         rowsToDelete.add(rowNumber);
       }
     });
@@ -503,11 +503,11 @@ async function generateOKBillWithHS(firstData, allCargoData, hsCodeMap = null) {
     // 替换D13单元格中的商品列表占位符，保留原始格式
     const goodsListCell = worksheet.getCell('D13');
     if (goodsListCell.value && goodsListCell.value.richText) {
-      // 创建新的富文本，按照指定格式：第1,3,5,7个片段红色，第2,4,6个片段黑色，字体Times New Roman
+      // 创建新的富文本，按照指定格式：奇数索引片段红色，偶数索引片段黑色，字体Times New Roman
       const newRichText = [];
       let hasContent = false; // 标记前面是否已经有内容
 
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 12; i++) {
         const cargoList = cargoListsWithHS[i];
 
         // 跳过空的商品列表
@@ -549,7 +549,7 @@ async function generateOKBillWithHS(firstData, allCargoData, hsCodeMap = null) {
       goodsListCell.value = { richText: newRichText };
     }
 
-    // 更新第22行的求和公式（数据行范围：15-21行）
+    // 更新第27行的求和公式（数据行范围：15-26行）
     // 注意：现在不删除行，只清空行内容，因此不需要更新公式
   });
 
@@ -670,8 +670,8 @@ async function generateOKBillWithoutHS(firstData, allCargoData) {
         }
       });
 
-      // 如果行包含公式或行号是22，不标记删除
-      if (hasEmptyBillNumber && !hasFormula && rowNumber !== 22) {
+      // 如果行包含公式或行号是27，不标记删除
+      if (hasEmptyBillNumber && !hasFormula && rowNumber !== 27) {
         rowsToDelete.add(rowNumber);
       }
     });
@@ -705,11 +705,11 @@ async function generateOKBillWithoutHS(firstData, allCargoData) {
     // 替换D13单元格中的商品列表占位符，保留原始格式
     const goodsListCell = worksheet.getCell('D13');
     if (goodsListCell.value && goodsListCell.value.richText) {
-      // 创建新的富文本，按照指定格式：第1,3,5,7个片段红色，第2,4,6个片段黑色，字体Times New Roman
+      // 创建新的富文本，按照指定格式：奇数索引片段红色，偶数索引片段黑色，字体Times New Roman
       const newRichText = [];
       let hasContent = false; // 标记前面是否已经有内容
 
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 12; i++) {
         const cargoList = cargoListsWithoutHS[i];
 
         // 跳过空的商品列表
@@ -751,7 +751,7 @@ async function generateOKBillWithoutHS(firstData, allCargoData) {
       goodsListCell.value = { richText: newRichText };
     }
 
-    // 更新第22行的求和公式（数据行范围：15-21行）
+    // 更新第27行的求和公式（数据行范围：15-26行）
     // 注意：现在不删除行，只清空行内容，因此不需要更新公式
   });
 
@@ -790,9 +790,9 @@ async function generateSummaryWithHS(firstData, allCargoData, hsCodeMap = null) 
     cargoListsWithHS.push(cargoListString);
   }
 
-  // 商品列表数据（最多7个）
+  // 商品列表数据（最多12个）
   const goodsListData = {};
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 12; i++) {
     goodsListData[`带HS的商品列表${i}`] = i <= cargoListsWithHS.length ? cargoListsWithHS[i - 1] : '';
   }
 
@@ -806,9 +806,9 @@ async function generateSummaryWithHS(firstData, allCargoData, hsCodeMap = null) 
     totalVolume += Number(cargo.体积) || 0;
   });
 
-  // 舱单字段映射（最多7个）
+  // 舱单字段映射（最多12个）
   const containerData = {};
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 12; i++) {
     const suffix = i + 1;
     if (i < allCargoData.length) {
       const cargo = allCargoData[i];
@@ -885,9 +885,9 @@ async function generateSummaryWithoutHS(firstData, allCargoData) {
     cargoListsWithoutHS.push(cargoListString);
   }
 
-  // 商品列表数据（最多7个）
+  // 商品列表数据（最多12个）
   const goodsListData = {};
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 12; i++) {
     goodsListData[`无HS的商品列表${i}`] = i <= cargoListsWithoutHS.length ? cargoListsWithoutHS[i - 1] : '';
   }
 
@@ -901,9 +901,9 @@ async function generateSummaryWithoutHS(firstData, allCargoData) {
     totalVolume += Number(cargo.体积) || 0;
   });
 
-  // 舱单字段映射（最多7个）
+  // 舱单字段映射（最多12个）
   const containerData = {};
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 12; i++) {
     const suffix = i + 1;
     if (i < allCargoData.length) {
       const cargo = allCargoData[i];
